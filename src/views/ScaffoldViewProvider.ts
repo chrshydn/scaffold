@@ -31,6 +31,7 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
   private fileWatcher: FileWatcher;
   private analysisResult?: AnalysisResult;
   private isAnalyzing = false;
+  private currentFilePath?: string;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -89,11 +90,60 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
       case 'requestData':
         if (this.analysisResult) {
           this.sendMessage({ type: 'analysisResult', data: this.analysisResult });
+          this.sendCurrentFileInfo();
         } else {
           await this.runAnalysis();
         }
         break;
     }
+  }
+
+  /**
+   * Update current file tracking and send to webview
+   */
+  public updateCurrentFile(filePath: string | undefined): void {
+    this.currentFilePath = filePath;
+    this.sendCurrentFileInfo();
+  }
+
+  /**
+   * Send current file dependency info to webview
+   */
+  private sendCurrentFileInfo(): void {
+    if (!this._view || !this.currentFilePath) {
+      this.sendMessage({ type: 'currentFile', data: null } as any);
+      return;
+    }
+
+    const graph = this.graphBuilder.getGraph();
+    const node = graph.getNode(this.currentFilePath);
+
+    if (!node) {
+      this.sendMessage({ type: 'currentFile', data: null } as any);
+      return;
+    }
+
+    // Get full info for imports and importedBy
+    const imports = node.imports.map(p => {
+      const n = graph.getNode(p);
+      return { filePath: p, relativePath: n?.relativePath || p };
+    });
+
+    const importedBy = node.importedBy.map(p => {
+      const n = graph.getNode(p);
+      return { filePath: p, relativePath: n?.relativePath || p };
+    });
+
+    this.sendMessage({
+      type: 'currentFile',
+      data: {
+        filePath: this.currentFilePath,
+        relativePath: node.relativePath,
+        imports,
+        importedBy,
+        metrics: node.metrics
+      }
+    } as any);
   }
 
   /**
@@ -140,20 +190,44 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
           const loadBearingFiles = metricsCalculator.getLoadBearingFiles(graph);
           const leafFiles = metricsCalculator.getLeafFiles(graph);
 
+          // Group files by directory
+          const allNodes = graph.getAllNodes();
+          const filesByDirectory: { [dir: string]: { filePath: string; relativePath: string; metrics: any }[] } = {};
+          for (const node of allNodes) {
+            const parts = node.relativePath.split(/[\\/]/);
+            let dirKey = parts.length > 1 ? parts.slice(0, -1).join('/') : '(root)';
+            // Simplify to top-level dir
+            const topParts = dirKey.split('/');
+            if (topParts[0] === 'src' && topParts.length > 1) {
+              dirKey = 'src/' + topParts[1];
+            } else {
+              dirKey = topParts[0];
+            }
+            if (!filesByDirectory[dirKey]) {
+              filesByDirectory[dirKey] = [];
+            }
+            filesByDirectory[dirKey].push({
+              filePath: node.filePath,
+              relativePath: node.relativePath,
+              metrics: node.metrics
+            });
+          }
+
           // Build result
           this.analysisResult = {
             framework: frameworkInfo,
             entryPoints: this.convertEntryPoints(entryPoints),
             navigation,
             directories,
+            filesByDirectory,
             loadBearingFiles,
             leafFiles,
             totalFiles: graph.getFileCount(),
             timestamp: Date.now()
-          };
+          } as any;
 
           // Send to webview
-          this.sendMessage({ type: 'analysisResult', data: this.analysisResult });
+          this.sendMessage({ type: 'analysisResult', data: this.analysisResult } as any);
         }
       );
     } catch (error) {
@@ -457,6 +531,52 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
       background-color: var(--vscode-badge-background);
       color: var(--vscode-badge-foreground);
     }
+
+    .item-readonly {
+      cursor: default;
+      opacity: 0.9;
+    }
+
+    .item-readonly:hover {
+      background-color: transparent;
+    }
+
+    .expand-toggle {
+      justify-content: center;
+      color: var(--vscode-textLink-foreground);
+      font-size: 11px;
+      margin-top: 4px;
+      opacity: 0.8;
+    }
+
+    .expand-toggle:hover {
+      opacity: 1;
+    }
+
+    .current-file-section {
+      background-color: var(--vscode-editor-background);
+      border-radius: 6px;
+      padding: 8px;
+      margin-bottom: 16px;
+      border: 1px solid var(--vscode-panel-border);
+    }
+
+    .current-file-header {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      color: var(--vscode-textLink-foreground);
+    }
+
+    .current-file-section .section {
+      margin-bottom: 8px;
+    }
+
+    .current-file-section .section-content {
+      padding-left: 8px;
+    }
   </style>
 </head>
 <body>
@@ -470,6 +590,7 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
     const vscode = acquireVsCodeApi();
 
     let analysisData = null;
+    let currentFileData = null;
     let collapsedSections = new Set();
 
     // Request initial data
@@ -482,6 +603,10 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
       switch (message.type) {
         case 'analysisResult':
           analysisData = message.data;
+          render();
+          break;
+        case 'currentFile':
+          currentFileData = message.data;
           render();
           break;
         case 'analysisProgress':
@@ -506,6 +631,12 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
       } else if (action === 'open-file') {
         const filePath = target.dataset.filepath;
         openFile(filePath);
+      } else if (action === 'toggle-expand') {
+        const sectionId = target.dataset.section;
+        toggleSection(sectionId);
+      } else if (action === 'toggle-dir') {
+        const dirName = target.dataset.dir;
+        toggleSection('dir-' + dirName);
       }
     });
 
@@ -535,6 +666,26 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
       html += '<div class="stat"><div class="stat-value">' + leafFiles.length + '</div><div class="stat-label">Leaf</div></div>';
       html += '</div>';
 
+      // Current file dependencies section
+      if (currentFileData) {
+        html += '<div class="current-file-section">';
+        html += '<div class="current-file-header">' + escapeHtml(currentFileData.relativePath.split(/[\\\\/]/).pop()) + '</div>';
+
+        // Files this imports
+        html += renderSection('current-imports', 'This File Imports', currentFileData.imports.length, () => {
+          if (currentFileData.imports.length === 0) return '<div class="empty-state">No imports</div>';
+          return currentFileData.imports.map(f => renderFileItem(f.filePath, '→', null)).join('');
+        });
+
+        // Files that import this (affected by changes)
+        html += renderSection('current-importedby', 'Affected By Changes', currentFileData.importedBy.length, () => {
+          if (currentFileData.importedBy.length === 0) return '<div class="empty-state">No dependents (safe to modify)</div>';
+          return currentFileData.importedBy.map(f => renderFileItem(f.filePath, '←', null)).join('');
+        });
+
+        html += '</div>';
+      }
+
       // Entry Points section
       html += renderSection('entry-points', 'Entry Points', entryPoints.length, () => {
         if (entryPoints.length === 0) return '<div class="empty-state">No entry points found</div>';
@@ -552,14 +703,7 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
       // Architecture section
       html += renderSection('architecture', 'Architecture', directories.length, () => {
         if (directories.length === 0) return '<div class="empty-state">No directories found</div>';
-        return directories.slice(0, 10).map(dir =>
-          '<div class="item">' +
-          '<span class="item-icon">📁</span>' +
-          '<span class="item-name">' + escapeHtml(dir.name) + '</span>' +
-          (dir.category && dir.category !== 'other' ? '<span class="dir-category">' + dir.category + '</span>' : '') +
-          '<span class="item-badge">' + dir.fileCount + '</span>' +
-          '</div>'
-        ).join('');
+        return directories.map(dir => renderDirectoryItem(dir)).join('');
       });
 
       // Load-bearing files section
@@ -574,9 +718,18 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
       // Leaf files section
       html += renderSection('leaf-files', 'Leaf Files', leafFiles.length, () => {
         if (leafFiles.length === 0) return '<div class="empty-state">No leaf files found</div>';
-        const displayLeafs = leafFiles.slice(0, 20);
-        return displayLeafs.map(file => renderFileItem(file.filePath, '🍃')).join('') +
-          (leafFiles.length > 20 ? '<div class="empty-state">+ ' + (leafFiles.length - 20) + ' more</div>' : '');
+        const isExpanded = collapsedSections.has('leaf-files-expand');
+        const displayLimit = isExpanded ? leafFiles.length : 20;
+        const displayLeafs = leafFiles.slice(0, displayLimit);
+        let result = displayLeafs.map(file => renderFileItem(file.filePath, '🍃')).join('');
+        if (leafFiles.length > 20) {
+          if (isExpanded) {
+            result += '<div class="item expand-toggle" data-action="toggle-expand" data-section="leaf-files-expand">▲ Show less</div>';
+          } else {
+            result += '<div class="item expand-toggle" data-action="toggle-expand" data-section="leaf-files-expand">▼ Show ' + (leafFiles.length - 20) + ' more</div>';
+          }
+        }
+        return result;
       });
 
       app.innerHTML = html;
@@ -624,6 +777,39 @@ export class ScaffoldViewProvider implements vscode.WebviewViewProvider {
         html += '</div>';
         return html;
       }).join('');
+    }
+
+    function renderDirectoryItem(dir) {
+      const isExpanded = collapsedSections.has('dir-' + dir.path);
+      const files = analysisData.filesByDirectory[dir.path] || [];
+
+      let html = '<div class="dir-item">';
+      html += '<div class="item" data-action="toggle-dir" data-dir="' + escapeAttr(dir.path) + '">';
+      html += '<span class="section-icon ' + (isExpanded ? '' : 'collapsed') + '">▼</span>';
+      html += '<span class="item-icon">📁</span>';
+      html += '<span class="item-name">' + escapeHtml(dir.name) + '</span>';
+      if (dir.category && dir.category !== 'other') {
+        html += '<span class="dir-category">' + dir.category + '</span>';
+      }
+      html += '<span class="item-badge">' + dir.fileCount + '</span>';
+      html += '</div>';
+
+      if (isExpanded && files.length > 0) {
+        html += '<div class="tree-children">';
+        files.forEach(file => {
+          const fileName = file.relativePath.split(/[\\\\/]/).pop();
+          const tier = getImportanceTier(file.metrics.importanceScore);
+          html += '<div class="item" data-action="open-file" data-filepath="' + escapeAttr(file.filePath) + '">';
+          html += '<span class="item-icon importance-' + tier + '">◆</span>';
+          html += '<span class="item-name">' + escapeHtml(fileName) + '</span>';
+          html += '<span class="item-badge">' + file.metrics.inDegree + '↓ ' + file.metrics.outDegree + '↑</span>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      html += '</div>';
+      return html;
     }
 
     function toggleSection(id) {

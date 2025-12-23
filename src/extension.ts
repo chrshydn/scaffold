@@ -83,13 +83,21 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.command = 'scaffold.showFileMetrics';
   context.subscriptions.push(statusBarItem);
 
-  // Update status bar on active editor change
+  // Update status bar and current file on active editor change
   context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(updateStatusBar)
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      updateStatusBar(editor);
+      if (viewProvider) {
+        viewProvider.updateCurrentFile(editor?.document.uri.fsPath);
+      }
+    })
   );
 
-  // Initial status bar update
+  // Initial status bar update and current file
   updateStatusBar(vscode.window.activeTextEditor);
+  if (viewProvider && vscode.window.activeTextEditor) {
+    viewProvider.updateCurrentFile(vscode.window.activeTextEditor.document.uri.fsPath);
+  }
 
   console.log('Scaffold extension activated');
 }
