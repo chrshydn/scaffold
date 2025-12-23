@@ -56,7 +56,8 @@
       },
       {
         "command": "scaffold.showFileMetrics",
-        "title": "Scaffold: Show File Metrics"
+        "title": "Scaffold: Show File Metrics",
+        "icon": "$(info)"
       }
     ],
     "menus": {
