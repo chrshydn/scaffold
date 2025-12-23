@@ -1,6 +1,6 @@
 {
-  "name": "scaffold",
-  "displayName": "Scaffold",
+  "name": "scaffold-structure-map",
+  "displayName": "Scaffold - Structure Map",
   "description": "Live structural map of React/React Native TypeScript codebases",
   "version": "0.1.0",
   "publisher": "chrshydn",
