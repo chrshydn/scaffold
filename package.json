@@ -4,6 +4,7 @@
   "description": "Live structural map of React/React Native TypeScript codebases",
   "version": "0.1.1",
   "publisher": "chrshydn",
+  "icon": "media/scaffold-icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -44,7 +45,8 @@
         {
           "type": "webview",
           "id": "scaffold.structureView",
-          "name": "Structure Map"
+          "name": "Structure Map",
+          "icon": "media/scaffold-icon.svg"
         }
       ]
     },
@@ -65,7 +67,8 @@
         {
           "command": "scaffold.refresh",
           "when": "view == scaffold.structureView",
-          "group": "navigation"
+          "group": "navigation",
+          "icon": "$(refresh)"
         }
       ],
       "explorer/context": [
