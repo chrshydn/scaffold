@@ -1,0 +1,231 @@
+/*
+ * Scaffold WebView Styles
+ * These styles are inlined in the HTML for CSP compliance,
+ * but this file serves as documentation and for easier editing.
+ */
+
+:root {
+  --vscode-font-family: var(--vscode-editor-font-family, 'Segoe UI', sans-serif);
+}
+
+body {
+  font-family: var(--vscode-font-family);
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-sideBar-background);
+  padding: 0;
+  margin: 0;
+}
+
+.container {
+  padding: 12px;
+}
+
+/* Loading state */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--vscode-progressBar-background);
+  border-top-color: var(--vscode-button-background);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Sections */
+.section {
+  margin-bottom: 16px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.section-icon {
+  margin-right: 6px;
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.section-icon.collapsed {
+  transform: rotate(-90deg);
+}
+
+.section-title {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--vscode-sideBarSectionHeader-foreground);
+}
+
+.section-badge {
+  margin-left: auto;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.section-content {
+  padding-left: 16px;
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+}
+
+.section-content.collapsed {
+  max-height: 0 !important;
+}
+
+/* Items */
+.item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.item-icon {
+  margin-right: 8px;
+  opacity: 0.7;
+}
+
+.item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-badge {
+  margin-left: 8px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Importance colors */
+.importance-critical {
+  color: var(--vscode-charts-red);
+}
+
+.importance-high {
+  color: var(--vscode-charts-orange);
+}
+
+.importance-medium {
+  color: var(--vscode-charts-yellow);
+}
+
+.importance-low {
+  color: var(--vscode-charts-green);
+}
+
+/* Framework badge */
+.framework-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background-color: var(--vscode-button-secondaryBackground);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.framework-name {
+  font-weight: 600;
+}
+
+.framework-version {
+  margin-left: 6px;
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+/* Stats */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 8px;
+  background-color: var(--vscode-editor-background);
+  border-radius: 4px;
+}
+
+.stat {
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--vscode-textLink-foreground);
+}
+
+.stat-label {
+  font-size: 10px;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 20px;
+  opacity: 0.7;
+}
+
+/* Tree */
+.tree-item {
+  padding-left: 12px;
+}
+
+.tree-children {
+  padding-left: 12px;
+  border-left: 1px solid var(--vscode-tree-indentGuidesStroke);
+  margin-left: 6px;
+}
+
+/* Error */
+.error-message {
+  color: var(--vscode-errorForeground);
+  padding: 12px;
+  background-color: var(--vscode-inputValidation-errorBackground);
+  border-radius: 4px;
+  margin: 12px;
+}
+
+/* Directory category */
+.dir-category {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 6px;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
