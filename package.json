@@ -2,7 +2,7 @@
   "name": "scaffold-structure-map",
   "displayName": "Scaffold - Structure Map",
   "description": "Live structural map of React/React Native TypeScript codebases",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "chrshydn",
   "icon": "media/scaffold-icon.png",
   "license": "MIT",
