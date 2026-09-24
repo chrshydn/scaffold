@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "out-test",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "mocha", "vscode"]
+  },
+  "include": ["test/**/*.ts"],
+  "exclude": ["test/fixture"]
+}

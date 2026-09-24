@@ -1,9 +1,12 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { ImportGraphBuilder } from '../analyzers/importGraphBuilder';
+import { SOURCE_GLOB, isSourceFile } from '../parsers/typescriptParser';
 
 /**
- * Watches for file changes and triggers incremental graph updates
+ * Watches for file changes and keeps the import graph up to date.
+ *
+ * Content changes are applied incrementally. Creates and deletes trigger a
+ * full rebuild, since they can change what other files' imports resolve to.
  */
 export class FileWatcher {
   private workspaceRoot: string;
@@ -11,7 +14,7 @@ export class FileWatcher {
   private watcher: vscode.FileSystemWatcher | null = null;
   private debounceTimer: NodeJS.Timeout | null = null;
   private pendingUpdates: Set<string> = new Set();
-  private pendingDeletes: Set<string> = new Set();
+  private structureChanged = false;
   private onUpdateCallback?: () => void;
 
   private readonly DEBOUNCE_MS = 500;
@@ -25,19 +28,19 @@ export class FileWatcher {
    * Start watching for file changes
    */
   start(onUpdate?: () => void): void {
+    if (this.watcher) {
+      return;
+    }
     this.onUpdateCallback = onUpdate;
 
-    // Watch TypeScript/TSX files
-    const pattern = new vscode.RelativePattern(
-      this.workspaceRoot,
-      '**/*.{ts,tsx}'
+    this.watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(this.workspaceRoot, SOURCE_GLOB)
     );
 
-    this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-    this.watcher.onDidCreate((uri) => this.handleCreate(uri));
-    this.watcher.onDidChange((uri) => this.handleChange(uri));
-    this.watcher.onDidDelete((uri) => this.handleDelete(uri));
+    const onStructureChange = (uri: vscode.Uri) => this.enqueue(uri, () => { this.structureChanged = true; });
+    this.watcher.onDidCreate(onStructureChange);
+    this.watcher.onDidDelete(onStructureChange);
+    this.watcher.onDidChange((uri) => this.enqueue(uri, () => this.pendingUpdates.add(uri.fsPath)));
   }
 
   /**
@@ -54,109 +57,55 @@ export class FileWatcher {
     }
   }
 
-  /**
-   * Handle file creation
-   */
-  private handleCreate(uri: vscode.Uri): void {
+  private enqueue(uri: vscode.Uri, record: () => void): void {
     if (this.shouldIgnore(uri.fsPath)) {
       return;
     }
+    record();
 
-    this.pendingUpdates.add(uri.fsPath);
-    this.scheduleFlush();
-  }
-
-  /**
-   * Handle file change
-   */
-  private handleChange(uri: vscode.Uri): void {
-    if (this.shouldIgnore(uri.fsPath)) {
-      return;
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
     }
-
-    this.pendingUpdates.add(uri.fsPath);
-    this.scheduleFlush();
-  }
-
-  /**
-   * Handle file deletion
-   */
-  private handleDelete(uri: vscode.Uri): void {
-    if (this.shouldIgnore(uri.fsPath)) {
-      return;
-    }
-
-    // Remove from pending updates if present
-    this.pendingUpdates.delete(uri.fsPath);
-    this.pendingDeletes.add(uri.fsPath);
-    this.scheduleFlush();
+    this.debounceTimer = setTimeout(() => this.flushUpdates(), this.DEBOUNCE_MS);
   }
 
   /**
    * Check if a file should be ignored
    */
   private shouldIgnore(filePath: string): boolean {
-    // Ignore node_modules
-    if (filePath.includes('node_modules')) {
-      return true;
-    }
-
-    // Ignore files outside workspace
     const normalized = filePath.replace(/\\/g, '/');
     const rootNormalized = this.workspaceRoot.replace(/\\/g, '/');
-    if (!normalized.startsWith(rootNormalized)) {
-      return true;
-    }
-
-    // Ignore non-TypeScript files
-    const ext = path.extname(filePath);
-    if (!['.ts', '.tsx'].includes(ext)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Schedule a debounced flush of pending updates
-   */
-  private scheduleFlush(): void {
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-    }
-
-    this.debounceTimer = setTimeout(() => {
-      this.flushUpdates();
-    }, this.DEBOUNCE_MS);
+    return (
+      normalized.includes('/node_modules/') ||
+      !normalized.startsWith(rootNormalized) ||
+      !isSourceFile(filePath)
+    );
   }
 
   /**
    * Flush all pending updates
    */
   private async flushUpdates(): Promise<void> {
+    this.debounceTimer = null;
     const updates = Array.from(this.pendingUpdates);
-    const deletes = Array.from(this.pendingDeletes);
+    const structureChanged = this.structureChanged;
 
     this.pendingUpdates.clear();
-    this.pendingDeletes.clear();
+    this.structureChanged = false;
 
-    // Process deletes first
-    for (const filePath of deletes) {
-      this.graphBuilder.removeFile(filePath);
-    }
-
-    // Process updates
-    for (const filePath of updates) {
-      try {
-        await this.graphBuilder.updateFile(filePath);
-      } catch (error) {
-        console.error(`Failed to update ${filePath}:`, error);
+    try {
+      let changed = true;
+      if (structureChanged) {
+        await this.graphBuilder.buildGraph();
+      } else {
+        changed = await this.graphBuilder.applyChanges(updates);
       }
-    }
 
-    // Trigger callback if any changes were made
-    if ((updates.length > 0 || deletes.length > 0) && this.onUpdateCallback) {
-      this.onUpdateCallback();
+      if (changed) {
+        this.onUpdateCallback?.();
+      }
+    } catch (error) {
+      console.error('Failed to apply file changes:', error);
     }
   }
 

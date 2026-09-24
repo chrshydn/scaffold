@@ -93,7 +93,6 @@ export class NavigationAnalyzer {
           path.join(dirPath, 'page.js')
         ]);
 
-        const routePath = this.getRoutePathFromDir(dirPath, baseDir);
         const route: NavigationRoute = {
           name: this.formatRouteName(entry.name),
           filePath: pageFile || undefined,
@@ -204,7 +203,7 @@ export class NavigationAnalyzer {
         // Parse navigation files to find screens
         for (const file of files) {
           const content = fs.readFileSync(file.fsPath, 'utf-8');
-          const screens = this.extractReactNavigationScreens(content, file.fsPath);
+          const screens = this.extractReactNavigationScreens(content);
           routes.push(...screens);
         }
 
@@ -276,7 +275,7 @@ export class NavigationAnalyzer {
   /**
    * Extract screen names from React Navigation code
    */
-  private extractReactNavigationScreens(content: string, filePath: string): NavigationRoute[] {
+  private extractReactNavigationScreens(content: string): NavigationRoute[] {
     const routes: NavigationRoute[] = [];
 
     // Match Screen components: <Stack.Screen name="ScreenName" ...
@@ -413,14 +412,6 @@ export class NavigationAnalyzer {
    */
   private isPageFile(filename: string): boolean {
     return /\.(tsx|ts|jsx|js)$/.test(filename) && !filename.startsWith('_');
-  }
-
-  /**
-   * Get route path from directory path
-   */
-  private getRoutePathFromDir(dirPath: string, baseDir: string): string {
-    const relative = path.relative(baseDir, dirPath);
-    return '/' + relative.replace(/\\/g, '/');
   }
 
   /**

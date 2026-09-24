@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Framework, FrameworkInfo, EntryPoint } from '../models/types';
+import { FrameworkInfo, EntryPoint } from '../models/types';
 
 /**
  * Finds entry points based on the detected framework
@@ -47,7 +47,9 @@ export class EntryPointFinder {
             entryPoints.push({ filePath: entryPath, type: 'main', framework: 'expo' });
           }
         }
-      } catch {}
+      } catch {
+        // Malformed JSON: fall back to conventional entry files
+      }
     }
 
     // Check for expo-router (app directory)
@@ -104,7 +106,9 @@ export class EntryPointFinder {
             entryPoints.push({ filePath: mainPath, type: 'main', framework: 'react-native' });
           }
         }
-      } catch {}
+      } catch {
+        // Malformed JSON: fall back to conventional entry files
+      }
     }
 
     // Standard React Native entry

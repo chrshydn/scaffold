@@ -2,13 +2,16 @@
   "name": "scaffold-structure-map",
   "displayName": "Scaffold - Structure Map",
   "description": "Live structural map of React/React Native TypeScript codebases",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "publisher": "chrshydn",
   "icon": "media/scaffold-icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/scaffold/scaffold-vscode"
+    "url": "https://github.com/chrshydn/scaffold"
+  },
+  "bugs": {
+    "url": "https://github.com/chrshydn/scaffold/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -26,9 +29,7 @@
     "imports",
     "dependencies"
   ],
-  "activationEvents": [
-    "workspaceContains:**/package.json"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -81,19 +82,29 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run bundle",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src test --ext ts",
+    "bundle": "npm run typecheck && esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node18 --minify",
+    "typecheck": "tsc -p ./ --noEmit",
+    "pretest": "npm run bundle && tsc -p tsconfig.test.json",
+    "test": "npm run test:webview && npm run test:integration",
+    "test:webview": "mocha out-test/test/webview.test.js",
+    "test:integration": "node out-test/test/runTest.js"
   },
   "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.10.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
-    "eslint": "^8.54.0"
-  },
-  "dependencies": {
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.25.12",
+    "eslint": "^8.54.0",
+    "jsdom": "^26.1.0",
+    "mocha": "^11.8.0",
     "typescript": "^5.3.0"
   }
 }

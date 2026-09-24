@@ -6,7 +6,7 @@ A VS Code extension that provides a live structural map of React/React Native/Ne
 
 - **Framework Detection** - Auto-detects Expo, React Native, Next.js, or web React
 - **Entry Point Discovery** - Finds true entry points based on framework conventions
-- **Import Graph** - Static analysis of TypeScript imports to build dependency graph
+- **Import Graph** - Static analysis of TypeScript imports (including tsconfig path aliases and re-exports) to build a dependency graph
 - **Load-Bearing Files** - Identifies files that are widely imported (high impact)
 - **Leaf Files** - Shows files with no dependents (safe to modify)
 - **Live Updates** - Watches for file changes and updates incrementally
@@ -15,7 +15,7 @@ A VS Code extension that provides a live structural map of React/React Native/Ne
 
 ### From Source
 ```bash
-git clone https://github.com/YOUR_USERNAME/scaffold.git
+git clone https://github.com/chrshydn/scaffold.git
 cd scaffold
 npm install
 npm run compile
@@ -27,7 +27,7 @@ Then press F5 in VS Code to run the extension.
 ```bash
 npm install -g @vscode/vsce
 vsce package
-code --install-extension scaffold-0.1.0.vsix
+code --install-extension scaffold-structure-map-0.2.0.vsix
 ```
 
 ## Usage
@@ -50,8 +50,19 @@ Contributions welcome! The codebase is modular:
 
 - `src/analyzers/` - Framework detection, import graph, navigation analysis
 - `src/parsers/` - TypeScript import extraction
-- `src/views/` - WebView UI
+- `src/views/` - WebView provider
 - `src/watchers/` - File change detection
+- `media/` - WebView script and styles
+
+### Testing
+
+```bash
+npm test          # bundles, then runs webview tests (jsdom) and integration tests in VS Code
+npm run lint
+```
+
+Integration tests download a test copy of VS Code on first run and exercise the bundled
+extension against the sample project in `test/fixture/`.
 
 ## License
 

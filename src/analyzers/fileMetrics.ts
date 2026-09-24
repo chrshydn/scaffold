@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { ImportGraph } from '../models/graph';
-import { DirectoryStats, FileNode } from '../models/types';
+import { DirectoryStats, FileNode, FileSummary, ImportanceTier } from '../models/types';
 
 /**
  * Calculates file and directory metrics from the import graph
@@ -13,41 +13,37 @@ export class FileMetricsCalculator {
   }
 
   /**
-   * Get directory statistics grouped by category
+   * Group files by top-level directory and compute per-directory stats
+   * (sorted by file count descending)
    */
-  getDirectoryStats(graph: ImportGraph): DirectoryStats[] {
-    const nodes = graph.getAllNodes();
-    const dirCounts = new Map<string, number>();
-
-    // Count files per directory
-    for (const node of nodes) {
-      const dir = path.dirname(node.relativePath);
-      const topDir = this.getTopLevelDir(dir);
-
+  getDirectoryStats(graph: ImportGraph): {
+    directories: DirectoryStats[];
+    filesByDirectory: Record<string, FileSummary[]>;
+  } {
+    const filesByDirectory: Record<string, FileSummary[]> = {};
+    for (const node of graph.getAllNodes()) {
+      const topDir = FileMetricsCalculator.getTopLevelDir(node.relativePath);
       if (topDir) {
-        dirCounts.set(topDir, (dirCounts.get(topDir) || 0) + 1);
+        (filesByDirectory[topDir] ??= []).push(ImportGraph.toSummary(node));
       }
     }
 
-    // Convert to DirectoryStats array
-    const stats: DirectoryStats[] = [];
-    for (const [dirPath, count] of dirCounts) {
-      stats.push({
-        path: dirPath,
-        name: path.basename(dirPath) || dirPath,
-        fileCount: count,
-        category: this.categorizeDirectory(dirPath)
-      });
-    }
+    const directories: DirectoryStats[] = Object.entries(filesByDirectory).map(([dirPath, files]) => ({
+      path: dirPath,
+      name: path.basename(dirPath) || dirPath,
+      fileCount: files.length,
+      category: this.categorizeDirectory(dirPath)
+    }));
 
-    // Sort by file count descending
-    return stats.sort((a, b) => b.fileCount - a.fileCount);
+    return { directories: directories.sort((a, b) => b.fileCount - a.fileCount), filesByDirectory };
   }
 
   /**
-   * Get the top-level directory from a path
+   * Get the top-level directory for a workspace-relative file path
+   * (descends one level into `src/`). Returns null for root-level files.
    */
-  private getTopLevelDir(dirPath: string): string | null {
+  private static getTopLevelDir(relativePath: string): string | null {
+    const dirPath = path.dirname(relativePath);
     if (!dirPath || dirPath === '.') {
       return null;
     }
@@ -162,12 +158,8 @@ export class FileMetricsCalculator {
   /**
    * Get importance tier for a file based on its metrics
    */
-  static getImportanceTier(node: FileNode): 'critical' | 'high' | 'medium' | 'low' {
-    const score = node.metrics.importanceScore;
-    if (score >= 75) return 'critical';
-    if (score >= 50) return 'high';
-    if (score >= 25) return 'medium';
-    return 'low';
+  static getImportanceTier(node: FileNode): ImportanceTier {
+    return node.metrics.tier;
   }
 }
 

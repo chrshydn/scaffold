@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ScaffoldViewProvider } from './views/ScaffoldViewProvider';
 import { FileMetricsCalculator } from './analyzers/fileMetrics';
+import { isSourceFile } from './parsers/typescriptParser';
 
 let viewProvider: ScaffoldViewProvider | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -8,7 +9,7 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 /**
  * Extension activation
  */
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext): ScaffoldViewProvider | undefined {
   const workspaceRoot = getWorkspaceRoot();
   if (!workspaceRoot) {
     vscode.window.showWarningMessage('Scaffold: No workspace folder open');
@@ -19,16 +20,12 @@ export function activate(context: vscode.ExtensionContext) {
   viewProvider = new ScaffoldViewProvider(context.extensionUri, workspaceRoot);
 
   // Register the webview provider
-  const viewProviderDisposable = vscode.window.registerWebviewViewProvider(
-    ScaffoldViewProvider.viewType,
+  // No retainContextWhenHidden: the webview persists its own UI state and
+  // re-requests data from the cached analysis when shown again.
+  context.subscriptions.push(
     viewProvider,
-    {
-      webviewOptions: {
-        retainContextWhenHidden: true
-      }
-    }
+    vscode.window.registerWebviewViewProvider(ScaffoldViewProvider.viewType, viewProvider)
   );
-  context.subscriptions.push(viewProviderDisposable);
 
   // Register refresh command
   const refreshCommand = vscode.commands.registerCommand('scaffold.refresh', () => {
@@ -93,13 +90,17 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Refresh status bar whenever the graph changes
+  context.subscriptions.push(
+    viewProvider.onDidUpdateGraph(() => updateStatusBar(vscode.window.activeTextEditor))
+  );
+
   // Initial status bar update and current file
   updateStatusBar(vscode.window.activeTextEditor);
-  if (viewProvider && vscode.window.activeTextEditor) {
-    viewProvider.updateCurrentFile(vscode.window.activeTextEditor.document.uri.fsPath);
-  }
+  viewProvider.updateCurrentFile(vscode.window.activeTextEditor?.document.uri.fsPath);
 
-  console.log('Scaffold extension activated');
+  // Exported as the extension API (used by the integration tests)
+  return viewProvider;
 }
 
 /**
@@ -115,8 +116,8 @@ function updateStatusBar(editor: vscode.TextEditor | undefined) {
 
   const filePath = editor.document.uri.fsPath;
 
-  // Only show for TypeScript files
-  if (!filePath.endsWith('.ts') && !filePath.endsWith('.tsx')) {
+  // Only show for analyzed source files
+  if (!isSourceFile(filePath)) {
     statusBarItem.hide();
     return;
   }
@@ -134,10 +135,12 @@ function updateStatusBar(editor: vscode.TextEditor | undefined) {
     statusBarItem.text = `${tierIcon} ${metrics.metrics.inDegree}↓ ${metrics.metrics.outDegree}↑`;
     statusBarItem.tooltip = `Scaffold: ${metrics.metrics.inDegree} files import this, imports ${metrics.metrics.outDegree} files\nClick for details`;
     statusBarItem.show();
-  } else {
+  } else if (viewProvider.isAnalyzing) {
     statusBarItem.text = '$(loading~spin) Scaffold';
     statusBarItem.tooltip = 'Scaffold: Analyzing...';
     statusBarItem.show();
+  } else {
+    statusBarItem.hide();
   }
 }
 
@@ -156,7 +159,6 @@ function getWorkspaceRoot(): string | undefined {
  * Extension deactivation
  */
 export function deactivate() {
-  if (viewProvider) {
-    viewProvider.dispose();
-  }
+  viewProvider = undefined;
+  statusBarItem = undefined;
 }

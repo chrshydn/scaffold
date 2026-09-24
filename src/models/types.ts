@@ -22,38 +22,6 @@ export interface EntryPoint {
 }
 
 /**
- * Import information extracted from a file
- */
-export interface ImportInfo {
-  source: string;           // The import source string (e.g., './utils', 'react')
-  resolvedPath?: string;    // Resolved absolute path (for local imports)
-  isExternal: boolean;      // True if node_modules import
-  isTypeOnly: boolean;      // True if `import type`
-  importedNames: string[];  // Named imports
-  hasDefault: boolean;      // Has default import
-  hasNamespace: boolean;    // Has namespace import (import * as)
-}
-
-/**
- * Parsed file information
- */
-export interface ParsedFile {
-  filePath: string;
-  imports: ImportInfo[];
-  exports: ExportInfo[];
-  hasJsx: boolean;
-}
-
-/**
- * Export information
- */
-export interface ExportInfo {
-  name: string;
-  isDefault: boolean;
-  isType: boolean;
-}
-
-/**
  * File node in the import graph
  */
 export interface FileNode {
@@ -61,6 +29,15 @@ export interface FileNode {
   relativePath: string;
   imports: string[];        // Files this file imports (outgoing edges)
   importedBy: string[];     // Files that import this file (incoming edges)
+  metrics: FileMetrics;
+}
+
+/**
+ * Lightweight file reference sent to the webview (no edge lists)
+ */
+export interface FileSummary {
+  filePath: string;
+  relativePath: string;
   metrics: FileMetrics;
 }
 
@@ -73,7 +50,10 @@ export interface FileMetrics {
   isLeaf: boolean;          // True if no files import this (inDegree === 0)
   isLoadBearing: boolean;   // True if many files depend on this
   importanceScore: number;  // Calculated importance (0-100)
+  tier: ImportanceTier;     // Bucketed importanceScore
 }
+
+export type ImportanceTier = 'critical' | 'high' | 'medium' | 'low';
 
 /**
  * Navigation/routing information
@@ -108,14 +88,23 @@ export interface DirectoryStats {
  * Complete analysis result
  */
 export interface AnalysisResult {
-  framework: FrameworkInfo;
+  framework: FrameworkInfo & { displayName: string };
   entryPoints: EntryPoint[];
   navigation: NavigationStructure;
   directories: DirectoryStats[];
-  loadBearingFiles: FileNode[];
-  leafFiles: FileNode[];
+  filesByDirectory: Record<string, FileSummary[]>;
+  loadBearingFiles: FileSummary[];
+  leafFiles: FileSummary[];
   totalFiles: number;
-  timestamp: number;
+}
+
+/**
+ * Dependency info for the file open in the active editor
+ */
+export interface CurrentFileInfo {
+  relativePath: string;
+  imports: FileSummary[];
+  importedBy: FileSummary[];
 }
 
 /**
@@ -126,5 +115,5 @@ export type WebviewMessage =
   | { type: 'openFile'; filePath: string }
   | { type: 'requestData' }
   | { type: 'analysisResult'; data: AnalysisResult }
-  | { type: 'analysisProgress'; progress: number; message: string }
+  | { type: 'currentFile'; data: CurrentFileInfo | null }
   | { type: 'error'; message: string };

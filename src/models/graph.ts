@@ -1,4 +1,4 @@
-import { FileNode, FileMetrics } from './types';
+import { FileNode, FileSummary, ImportanceTier } from './types';
 
 /**
  * Import graph data structure
@@ -28,7 +28,8 @@ export class ImportGraph {
           outDegree: 0,
           isLeaf: true,
           isLoadBearing: false,
-          importanceScore: 0
+          importanceScore: 0,
+          tier: 'low'
         }
       };
       this.nodes.set(filePath, node);
@@ -99,18 +100,22 @@ export class ImportGraph {
    * Calculate metrics for all nodes
    */
   calculateMetrics(): void {
-    const maxInDegree = Math.max(1, ...Array.from(this.nodes.values()).map(n => n.importedBy.length));
+    let maxInDegree = 1;
+    for (const node of this.nodes.values()) {
+      maxInDegree = Math.max(maxInDegree, node.importedBy.length);
+    }
 
     for (const node of this.nodes.values()) {
       const inDegree = node.importedBy.length;
-      const outDegree = node.imports.length;
+      const importanceScore = Math.round((inDegree / maxInDegree) * 100);
 
       node.metrics = {
         inDegree,
-        outDegree,
+        outDegree: node.imports.length,
         isLeaf: inDegree === 0,
         isLoadBearing: inDegree >= 5, // Threshold for "load-bearing"
-        importanceScore: Math.round((inDegree / maxInDegree) * 100)
+        importanceScore,
+        tier: toTier(importanceScore)
       };
     }
   }
@@ -145,7 +150,7 @@ export class ImportGraph {
   getLeafFiles(): FileNode[] {
     return this.getAllNodes()
       .filter(n => n.metrics.isLeaf)
-      .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+      .sort((a, b) => (a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0));
   }
 
   /**
@@ -168,23 +173,16 @@ export class ImportGraph {
   }
 
   /**
-   * Serialize the graph for storage/transfer
+   * Strip edge lists for sending to the webview
    */
-  serialize(): { nodes: FileNode[]; workspaceRoot: string } {
-    return {
-      nodes: this.getAllNodes(),
-      workspaceRoot: this.workspaceRoot
-    };
+  static toSummary(node: FileNode): FileSummary {
+    return { filePath: node.filePath, relativePath: node.relativePath, metrics: node.metrics };
   }
+}
 
-  /**
-   * Deserialize a graph from storage
-   */
-  static deserialize(data: { nodes: FileNode[]; workspaceRoot: string }): ImportGraph {
-    const graph = new ImportGraph(data.workspaceRoot);
-    for (const node of data.nodes) {
-      graph.nodes.set(node.filePath, node);
-    }
-    return graph;
-  }
+function toTier(score: number): ImportanceTier {
+  if (score >= 75) return 'critical';
+  if (score >= 50) return 'high';
+  if (score >= 25) return 'medium';
+  return 'low';
 }

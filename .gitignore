@@ -2,3 +2,6 @@ out/
 node_modules/
 *.vsix
 .vscode-test/
+.vscode-test/
+out-test/
+!test/fixture/node_modules/
